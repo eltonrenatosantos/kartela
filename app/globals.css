@@ -105,3 +105,17 @@
 	100% { background-position: 200% 0; }
 }
 
+/* completed card visuals */
+.cardCompleted {
+	border: 1px solid rgba(212,175,55,0.6);
+	background-color: #faf7ef;
+	/* subtle finished state */
+	opacity: 0.98;
+}
+
+/* disable hover transform/effects for completed cards */
+.card.cardCompleted:hover {
+	opacity: 0.95;
+	transform: none;
+}
+

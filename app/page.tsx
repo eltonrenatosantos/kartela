@@ -684,7 +684,7 @@ export default function Home() {
                 const pct = g.target_amount ? clamp((saved / g.target_amount) * 100, 0, 100) : 0;
                 const isCompleted = pct >= 100;
                 return (
-                  <div className="card" key={g.id}>
+                  <div className={`card ${isCompleted ? "cardCompleted" : ""}`} key={g.id}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <div>
                         <div className="big">{g.title}</div>
@@ -726,11 +726,14 @@ export default function Home() {
                           className="btn btnPrimary"
                           style={{ width: "100%" }}
                           onClick={() => {
-                            setActiveGoalId(g.id);
-                            setScreen("grid");
+                            if (!isCompleted) {
+                              setActiveGoalId(g.id);
+                              setScreen("grid");
+                            }
                           }}
+                          disabled={isCompleted}
                         >
-                          Ver cartela
+                          {isCompleted ? "Meta concluída" : "Ver cartela"}
                         </button>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", paddingRight: 6 }}>
