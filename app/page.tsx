@@ -38,8 +38,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   // create form (mantém o visual do wireframe)
-  const [title, setTitle] = useState("Minha meta");
-  const [target, setTarget] = useState<number>(1000);
+  const [title, setTitle] = useState("");
+  const [target, setTarget] = useState<string>("");
   const [deadline, setDeadline] = useState<string>(todayISO()); // UI only (ainda não persistimos no DB)
   const [difficulty, setDifficulty] = useState<"easy" | "normal" | "hard">("normal");
   const maxCell = 300;
@@ -822,17 +822,17 @@ if (!email) {
               <div className="card stack">
                 <div className="field">
                   <label>Nome da meta</label>
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: PC gamer" />
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Carro, Férias" />
                 </div>
 
                 <div className="field">
                   <label>Valor total (R$)</label>
                   <input
-                    inputMode="numeric"
-                    value={String(target)}
-                    onChange={(e) => setTarget(Number((e.target.value || "").replace(/[^\d]/g, "")))}
-                    placeholder="Ex: 3000"
-                  />
+                  inputMode="numeric"
+                  value={target}
+                  onChange={(e) => setTarget((e.target.value || "").replace(/[^\d]/g, ""))}
+                  placeholder="Ex: 1000, 35000…"
+                    />
                 </div>
 
                 <div className="field">
