@@ -425,3 +425,11 @@ input:focus{
   opacity: 1;
   transform: scale(1);
 }
+
+/* Dificuldade: botão ativo roxo claro (força sobre qualquer estilo anterior) */
+.seg button.on{
+  background: rgba(var(--primary-rgb), 0.14) !important;
+  border-color: rgba(var(--primary-rgb), 0.35) !important;
+  color: var(--primary-dark) !important;
+  box-shadow: 0 8px 18px rgba(var(--primary-rgb), 0.18) !important;
+}

@@ -1045,26 +1045,28 @@ if (!email) {
                     </div>
                   </div>
                 ) : (
-  cells.map((c) => (
-    <div
-      key={c.id}
-      onClick={(e) => askCheck(c, e)}
-      className={[
-        "cell",
-        c.is_checked ? "paid" : "",
-        justPaidId === c.id ? "justPaid" : "",
-        justCheckedId === c.id ? "justChecked" : "",
-        animatingId === c.id ? "clickAnim" : "",
-        glowId === c.id ? "clickGlow" : "",
-      ].join(" ")}
-      role="button"
-      aria-disabled={loading || c.is_checked}
-      title={c.is_checked ? "Já marcado" : "Clique para marcar"}
-    >
-      <div className="check">✓</div>
-      <div className="cellValue">{c.value}</div>
-    </div>
-  ))
+  [...cells]
+    .sort((a, b) => Number(!!a.is_checked) - Number(!!b.is_checked))
+    .map((c) => (
+      <div
+        key={c.id}
+        onClick={(e) => askCheck(c, e)}
+        className={[
+          "cell",
+          c.is_checked ? "paid" : "",
+          justPaidId === c.id ? "justPaid" : "",
+          justCheckedId === c.id ? "justChecked" : "",
+          animatingId === c.id ? "clickAnim" : "",
+          glowId === c.id ? "clickGlow" : "",
+        ].join(" ")}
+        role="button"
+        aria-disabled={loading || c.is_checked}
+        title={c.is_checked ? "Já marcado" : "Clique para marcar"}
+      >
+        <div className="check">✓</div>
+        <div className="cellValue">{c.value}</div>
+      </div>
+    ))
 )}
 
                 {moneyPops.map((p) => (
