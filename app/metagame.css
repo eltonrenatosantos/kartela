@@ -254,27 +254,24 @@ input:focus{
   color:#0F172A; user-select:none;
 }
 .grid{
-  margin-top: 10px;
-  display:grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 12px;
+  width: 100%;
 }
 @media (max-width: 380px){
   .grid{grid-template-columns: repeat(5, 1fr);}
 }
 
 .cell{
-  border-radius: 14px;
-  padding: 12px 8px;
-  border: 1px solid var(--stroke);
-  background:#fff;
-  font-weight: 1000;
-  text-align:center;
-  cursor:pointer;
-  user-select:none;
-  position:relative;
-  transition: transform .08s ease, box-shadow .12s ease;
-  overflow: visible;
+  aspect-ratio: 1 / 1;   /* quadrado perfeito */
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  position: relative;
 }
 .cell:active{transform: scale(.98)}
 .cell.small{background: #F0FDF4; border-color:#CFF5DB}
@@ -284,6 +281,10 @@ input:focus{
   cursor:default;
   opacity:.65;
   text-decoration: line-through;
+}
+.cellValue{
+  font-size: clamp(14px, 4vw, 22px);
+  font-weight: 800;
 }
 
 .check{
