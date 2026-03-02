@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { generateKartela } from "@/lib/generateKartela";
 
@@ -136,17 +136,26 @@ export default function Home() {
 
   const [pendingCell, setPendingCell] = useState<Cell | null>(null);
   const [justPaidId, setJustPaidId] = useState<string | null>(null);
+  const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
 
   // toast / confetti / pulse
   const [toastMsg, setToastMsg] = useState<string>("");
   const [toastShow, setToastShow] = useState(false);
   const toastTimer = useRef<number | null>(null);
 
+  // money pop state (rendered inside #grid so it's positioned relative to the cells)
+  const [moneyPops, setMoneyPops] = useState<{ id: string; left: number; top: number; value: number }[]>([]);
+  const lastClickPosRef = useRef<{ left: number; top: number } | null>(null);
+
   const [confettiShow, setConfettiShow] = useState(false);
   const [confettiBits, setConfettiBits] = useState<
     { leftPct: number; topPx: number; durMs: number; color: string }[]
   >([]);
   const confettiTimer = useRef<number | null>(null);
+
+  // completion overlay state (show once per goal)
+  const [completionShow, setCompletionShow] = useState(false);
+  const completedShownForGoalRef = useRef<string | null>(null);
 
   const lastStepRef = useRef<number>(0);
   const progressPulseRef = useRef<boolean>(false);
@@ -167,7 +176,40 @@ export default function Home() {
     setToastMsg(msg);
     setToastShow(true);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToastShow(false), 2200);
+    toastTimer.current = window.setTimeout(() => setToastShow(false), 1600);
+  }
+
+  // play short tick via Web Audio API (safe, on-demand)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  function playTick() {
+    try {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      const ctx = audioCtxRef.current;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = 880;
+      g.gain.value = 0.0001;
+      o.connect(g);
+      g.connect(ctx.destination);
+      const now = ctx.currentTime;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+      o.start(now);
+      o.stop(now + 0.09);
+    } catch (err) {
+      // audio blocked or not available — ignore
+      console.warn("Audio tick unavailable", err);
+    }
+  }
+
+  function spawnMoneyPop(left: number, top: number, value: number) {
+    const id = String(Math.random()).slice(2);
+    setMoneyPops((prev) => [...prev, { id, left, top, value }]);
+    window.setTimeout(() => setMoneyPops((prev) => prev.filter((p) => p.id !== id)), 900);
   }
 
   function burstConfetti(n: number) {
@@ -388,10 +430,24 @@ export default function Home() {
     }
   }
 
-  function askCheck(cell: Cell) {
+  function askCheck(cell: Cell, e?: MouseEvent<HTMLDivElement>) {
     if (cell.is_checked) {
       toast("Já marcado.");
       return;
+    }
+    // capture clicked position relative to #grid so pop can be positioned
+    try {
+      if (e) {
+        const grid = document.getElementById("grid");
+        const cellEl = e.currentTarget as HTMLElement;
+        if (grid && cellEl) {
+          const gRect = grid.getBoundingClientRect();
+          const cRect = cellEl.getBoundingClientRect();
+          lastClickPosRef.current = { left: cRect.left - gRect.left + cRect.width / 2, top: cRect.top - gRect.top + cRect.height / 2 };
+        }
+      }
+    } catch (err) {
+      lastClickPosRef.current = null;
     }
     setPendingCell(cell);
   }
@@ -415,6 +471,10 @@ export default function Home() {
       // otimista local
       setCells((prev) => prev.map((c) => (c.id === cellToMark.id ? { ...c, is_checked: true, checked_at: now } : c)));
 
+      // justChecked animation
+      setJustCheckedId(cellToMark.id);
+      window.setTimeout(() => setJustCheckedId(null), 450);
+
       // update cached per-goal sums so Home updates immediately
       setGoalSums((prev) => {
         const gid = cellToMark.goal_id;
@@ -428,15 +488,21 @@ export default function Home() {
       setJustPaidId(pendingCell.id);
       window.setTimeout(() => setJustPaidId(null), 600);
 
+      // spawn money pop if we have a captured click position
+      if (lastClickPosRef.current) {
+        spawnMoneyPop(lastClickPosRef.current.left, lastClickPosRef.current.top, Number(cellToMark.value ?? 0));
+      }
+
       setPendingCell(null);
 
-      if (navigator.vibrate) navigator.vibrate(12);
+      if (navigator.vibrate) try { navigator.vibrate(15); } catch (e) {}
+
+      // play tick (best-effort)
+      playTick();
 
       // recomputa novo pct (sem esperar render) pra efeitos
-      const newSaved = cells.reduce(
-        (acc, c) => acc + ((c.id === pendingCell.id ? true : c.is_checked) ? c.value : 0),
-        0
-      );
+      // compute new percentage using optimistic value
+      const newSaved = progress.saved + Number(cellToMark.value ?? 0);
       const newPct = activeGoal?.target_amount ? clamp((newSaved / activeGoal.target_amount) * 100, 0, 100) : 0;
       const newStep = Math.floor(newPct / 5);
 
@@ -445,11 +511,15 @@ export default function Home() {
         burstConfetti(10);
       }
 
-      toast(`+R$ ${pendingCell.value} guardados`);
+      toast(`+R$ ${cellToMark.value} guardados`);
 
+      // if we reached 100% for the first time on this goal, show completion overlay
       if (newPct >= 100) {
-        burstConfetti(42);
-        toast("Meta concluída ✅");
+        if (activeGoal && completedShownForGoalRef.current !== activeGoal.id) {
+          setCompletionShow(true);
+          completedShownForGoalRef.current = activeGoal.id;
+          burstConfetti(42);
+        }
       }
     } catch (e: any) {
       toast(e?.message ?? "Erro ao marcar.");
@@ -877,12 +947,13 @@ export default function Home() {
                 {cells.map((c) => (
                   <div
                     key={c.id}
-                    onClick={() => askCheck(c)}
+                    onClick={(e) => askCheck(c, e)}
                     className={[
                       "cell",
                       cellClass(c.value),
                       c.is_checked ? "paid" : "",
                       justPaidId === c.id ? "justPaid" : "",
+                      justCheckedId === c.id ? "justChecked" : "",
                     ].join(" ")}
                     role="button"
                     aria-disabled={loading || c.is_checked}
@@ -890,6 +961,17 @@ export default function Home() {
                   >
                     <div className="check">✓</div>
                     <div>R$ {c.value}</div>
+                  </div>
+                ))}
+
+                {moneyPops.map((p) => (
+                  <div
+                    key={p.id}
+                    className="moneyPop"
+                    style={{ left: p.left + "px", top: p.top + "px" }}
+                    aria-hidden
+                  >
+                    +R$ {p.value}
                   </div>
                 ))}
               </div>
@@ -972,6 +1054,21 @@ export default function Home() {
       <div className={`toast ${toastShow ? "show" : ""}`} id="toast">
         {toastMsg}
       </div>
+
+      {/* Completion overlay */}
+      {completionShow && (
+        <div className="completionOverlay" onClick={() => setCompletionShow(false)}>
+          <div className="completionCard" onClick={(e) => e.stopPropagation()}>
+            <div className="sheetTitle">Meta concluída</div>
+            <div className="sheetSub">Você fechou a cartela.</div>
+            <div style={{ marginTop: 12 }}>
+              <button className="btn btnPrimary" onClick={() => setCompletionShow(false)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confetti */}
       <div className={`confetti ${confettiShow ? "show" : ""}`} id="confetti">
