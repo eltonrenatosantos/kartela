@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { generateKartela } from "@/lib/generateKartela";
 
 type Goal = { id: string; title: string; target_amount: number; created_at?: string | null; deadline?: string | null };
-type Cell = { id: string; goal_id: string; value: number; is_checked: boolean };
+type Cell = { id: string; goal_id: string; value: number; is_checked: boolean; checked_at?: string | null };
 
 type Screen = "home" | "create" | "grid" | "badges";
 
@@ -137,6 +137,9 @@ export default function Home() {
   const [pendingCell, setPendingCell] = useState<Cell | null>(null);
   const [justPaidId, setJustPaidId] = useState<string | null>(null);
   const [justCheckedId, setJustCheckedId] = useState<string | null>(null);
+  const [animatingId, setAnimatingId] = useState<string | null>(null);
+  const [glowId, setGlowId] = useState<string | null>(null);
+  const confirmLockRef = useRef(false);
 
   // toast / confetti / pulse
   const [toastMsg, setToastMsg] = useState<string>("");
@@ -449,6 +452,19 @@ export default function Home() {
       toast("Já marcado.");
       return;
     }
+    // prevent double-clicks / race conditions: ignore if global loading or this cell is animating
+    if (loading || animatingId) {
+      // silently ignore rapid interactions
+      return;
+    }
+    // start click animation lock
+    setAnimatingId(cell.id);
+    window.setTimeout(() => setAnimatingId((cur) => (cur === cell.id ? null : cur)), 200);
+
+    // quick glow overlay
+    setGlowId(cell.id);
+    window.setTimeout(() => setGlowId((cur) => (cur === cell.id ? null : cur)), 120);
+
     // capture clicked position relative to #grid so pop can be positioned
     try {
       if (e) {
@@ -468,6 +484,8 @@ export default function Home() {
 
   async function confirmCheck() {
     if (!pendingCell) return;
+    if (confirmLockRef.current) return;
+    confirmLockRef.current = true;
     const cellToMark = pendingCell; // freeze reference for optimistic updates
     setLoading(true);
 
@@ -539,6 +557,7 @@ export default function Home() {
       toast(e?.message ?? "Erro ao marcar.");
     } finally {
       setLoading(false);
+      confirmLockRef.current = false;
     }
   }
 
@@ -558,7 +577,7 @@ export default function Home() {
       // fetch remaining goals to update local state
       const { data: remaining, error: rErr } = await supabase
         .from("goals")
-        .select("id,title,target_amount,created_at")
+        .select("id,title,target_amount,created_at,deadline")
         .order("created_at", { ascending: false });
       if (rErr) throw rErr;
 
@@ -608,36 +627,31 @@ export default function Home() {
     }
   }
 
-  // ensure lastStepRef follows progress for future expansions
-  useEffect(() => {
-    lastStepRef.current = Math.floor(progress.pct / 5);
-  }, [progress.pct]);
+ // ensure lastStepRef follows progress for future expansions
+useEffect(() => {
+  lastStepRef.current = Math.floor(progress.pct / 5);
+}, [progress.pct]);
 
-  // UI helpers
-  const remaining = activeGoal ? Math.max(0, activeGoal.target_amount - progress.saved) : 0;
-  const progressClass = progressPulseRef.current ? "progressPulse" : "";
+// UI helpers
+const remaining = activeGoal ? Math.max(0, activeGoal.target_amount - progress.saved) : 0;
+const progressClass = progressPulseRef.current ? "progressPulse" : "";
 
-  function cellClass(v: number) {
-    if (v <= 50) return "small";
-    if (v <= 150) return "mid";
-    return "big";
-  }
+// (REMOVIDO) function cellClass(v: number) { ... }
 
-  // ----- RENDER (wireframe screens) -----
+// ----- RENDER (wireframe screens) -----
 
-  // login screen (wireframe-ish)
-  if (!email) {
-    return (
-      <div className="app">
-        <div className="topbar">
-          <div className="brand">
-            <div className="logo" />
-            <div>Kartela</div>
-          </div>
-          <div className="pill" id="pillAuth">
-            🔐 Login Google
-          </div>
+// login screen (wireframe-ish)
+if (!email) {
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="brand">
+  <img className="logoImg" src="/brand/logo.png" alt="Kartela" />
+</div>
+        <div className="pill" id="pillAuth">
+          🔐 Login Google
         </div>
+      </div>
 
         <div className="screenTitle">Entrar</div>
 
@@ -664,12 +678,11 @@ export default function Home() {
         {/* topbar */}
         <div className="topbar">
           <div className="brand">
-            <div className="logo" />
-            <div>Kartela</div>
-          </div>
+  <img className="logoImg" src="/brand/logo.png" alt="Kartela" />
+</div>
 
           <div className="pill" title={email}>
-            ✅ {email}
+             {email}
           </div>
         </div>
 
@@ -679,83 +692,123 @@ export default function Home() {
             <div className="screenTitle">Minhas metas</div>
 
             <div className="stack">
-              {sortedGoals.map((g) => {
-                const saved = goalSums[g.id] ?? 0;
-                const pct = g.target_amount ? clamp((saved / g.target_amount) * 100, 0, 100) : 0;
-                const isCompleted = pct >= 100;
-                return (
-                  <div className={`card ${isCompleted ? "cardCompleted" : ""}`} key={g.id}>
-                    <div className="row" style={{ justifyContent: "space-between" }}>
-                      <div>
-                        <div className="big">{isCompleted ? <><span className="goldCheck" aria-hidden>✔</span> {g.title}</> : g.title}</div>
-                        <div className="muted" style={{ fontWeight: 850, marginTop: 2 }}>{`R$ ${fmt(saved)} / R$ ${fmt(g.target_amount)}`}</div>
+              {loading && (
+                <>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="card skeletonCard">
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <div style={{ width: "60%" }} className="skeleton" />
+                        <div style={{ width: 40 }} className="skeleton" />
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: 'center' }}>
-                        {isCompleted && (
-                          <div className="finalizedBadge" aria-hidden>FINALIZADA</div>
-                        )}
-                        <button
-                          className="btn btnSmall btnGhost"
-                          onClick={() => {
-                            setPendingDeleteGoal(g);
-                            setModalMode("delete");
-                          }}
-                          title={`Deletar meta ${g.title}`}
-                        >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ color: "#DC2626" }} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <rect x="6.5" y="6" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="2.6" fill="none" />
-                            <rect x="4" y="3" width="16" height="3" rx="1.5" stroke="currentColor" strokeWidth="2.6" fill="none" />
-                            <rect x="9" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
-                            <rect x="11.7" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
-                            <rect x="14.4" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
-                          </svg>
-                        </button>
+                      <div style={{ marginTop: 12 }}>
+                        <div className="skeleton" style={{ height: 12, width: "90%" }} />
+                      </div>
+                      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                        <div className="skeleton" style={{ height: 44, width: "56%", borderRadius: 999 }} />
+                        <div style={{ flex: 1 }} />
                       </div>
                     </div>
+                  ))}
+                </>
+              )}
 
-                    <div className="progressWrap" style={{ marginTop: 10 }}>
-                      <div className="progressBar">
-                        <div className={`progressFill ${isCompleted ? "completed" : ""}`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
-                        <div className="muted" style={{ fontWeight: 950 }}>{`${Math.round(pct)}%`}</div>
-                        <div className="muted" style={{ fontWeight: isCompleted ? 600 : 950 }}>{isCompleted ? "Meta concluída" : `Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        {isCompleted ? (
-                          <button
-                            className="btnFinished"
-                            style={{ width: "100%", cursor: "default" }}
-                            onClick={() => {
-                              setActiveGoalId(g.id);
-                              setScreen("grid");
-                            }}
-                          >
-                            Concluída
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btnPrimary"
-                            style={{ width: "100%" }}
-                            onClick={() => {
-                              setActiveGoalId(g.id);
-                              setScreen("grid");
-                            }}
-                          >
-                            Ver cartela
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", paddingRight: 6 }}>
-                        <div className="chip">⏳ Prazo: <span>{g.deadline ? String(g.deadline).split("T")[0].split("-").reverse().join("/") : "—"}</span></div>
-                      </div>
+              {!loading && sortedGoals.length === 0 && (
+                <div className="emptyState">
+                  <div className="card" style={{ maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
+                    <div className="big">Sem metas ainda</div>
+                    <div className="micro" style={{ marginTop: 8 }}>Crie sua primeira meta para começar a guardar.</div>
+                    <div style={{ marginTop: 18 }}>
+                      <button className="btn btnPrimary" onClick={() => setScreen("create")}>Criar meta</button>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              {!loading && sortedGoals.length > 0 && (
+                <>
+                  {sortedGoals.map((g) => {
+                    const saved = goalSums[g.id] ?? 0;
+                    const pct = g.target_amount ? clamp((saved / g.target_amount) * 100, 0, 100) : 0;
+                    const isCompleted = pct >= 100;
+                    return (
+                      <div className={`card ${isCompleted ? "cardCompleted" : ""}`} key={g.id}>
+                        <div className="row" style={{ justifyContent: "space-between" }}>
+                          <div>
+                            <div className="big">{isCompleted ? <><span className="goldCheck" aria-hidden>✔</span> {g.title}</> : g.title}</div>
+                            <div className="muted valueTotal" style={{ fontWeight: 850, marginTop: 2 }}>{`R$ ${fmt(saved)} / R$ ${fmt(g.target_amount)}`}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 8, alignItems: 'center' }}>
+                            {isCompleted && (
+                              <div className="finalizedBadge" aria-hidden>FINALIZADA</div>
+                            )}
+                            <button
+                              className="btn btnSmall btnGhost"
+                              onClick={() => {
+                                setPendingDeleteGoal(g);
+                                setModalMode("delete");
+                              }}
+                              title={`Deletar meta ${g.title}`}
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ color: "#DC2626" }} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <rect x="6.5" y="6" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="2.6" fill="none" />
+                                <rect x="4" y="3" width="16" height="3" rx="1.5" stroke="currentColor" strokeWidth="2.6" fill="none" />
+                                <rect x="9" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
+                                <rect x="11.7" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
+                                <rect x="14.4" y="9" width="1.8" height="7" rx="0.9" fill="currentColor" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="progressWrap" style={{ marginTop: 10 }}>
+                          <div className="progressBar">
+                            <div
+  className={`progressFill ${isCompleted ? "completed" : ""}`}
+  style={{ ["--pct" as any]: isCompleted ? 1 : pct / 100 }}
+/>
+                          </div>
+                          <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
+                            <div className="muted" style={{ fontWeight: 950 }}>{`${Math.round(pct)}%`}</div>
+                            <div className="muted" style={{ fontWeight: isCompleted ? 600 : 950 }}>{isCompleted ? "Meta concluída" : `Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            {isCompleted ? (
+                              <button
+                                className="btn btnFinished"
+                                style={{ width: "100%", cursor: "default" }}
+                                onClick={() => {
+                                  setActiveGoalId(g.id);
+                                  setScreen("grid");
+                                }}
+                              >
+                                Concluída
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btnPrimary"
+                                style={{ width: "100%" }}
+                                onClick={() => {
+                                  setActiveGoalId(g.id);
+                                  setScreen("grid");
+                                }}
+                              >
+                                Ver cartela
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", paddingRight: 6 }}>
+                            <div className="chip">⏳ Prazo: <span>{g.deadline ? String(g.deadline).split("T")[0].split("-").reverse().join("/") : "—"}</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
             </div>
           </div>
         )}
@@ -786,7 +839,7 @@ export default function Home() {
                   <label>Prazo (data final)</label>
                   <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                   <div className="hint">
-                    UI do wireframe. (Persistência do prazo você pode adicionar depois no DB.)
+                   
                   </div>
                 </div>
 
@@ -941,7 +994,7 @@ export default function Home() {
                     META
                   </div>
                   <div className="big">{activeGoal?.title ?? "—"}</div>
-                    <div className="muted" style={{ fontWeight: 850, marginTop: 2 }}>
+                    <div className="muted valueTotal" style={{ fontWeight: 850, marginTop: 2 }}>
                       {activeGoal ? `R$ ${fmt(progress.saved)} / R$ ${fmt(activeGoal.target_amount)}` : "—"}
                     </div>
                 </div>
@@ -949,7 +1002,10 @@ export default function Home() {
 
               <div className="progressWrap">
                 <div className="progressBar">
-                  <div className={`progressFill ${progressClass} ${progress.pct >= 100 ? "completed" : ""}`} style={{ width: `${progress.pct}%` }} />
+                  <div
+  className={`progressFill ${progress.pct >= 100 ? "completed" : ""}`}
+  style={{ width: `${progress.pct}%` }}
+/>
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
                   <div className="muted" style={{ fontWeight: 950 }}>
@@ -975,25 +1031,41 @@ export default function Home() {
               </div>
 
               <div className="grid" id="grid">
-                {cells.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={(e) => askCheck(c, e)}
-                    className={[
+                {loading ? (
+                  // skeleton grid (12 placeholders)
+                  Array.from({ length: 12 }).map((_, i) => (
+                    <div key={i} className={["cell", "skeletonGridCell"].join(" ")} aria-hidden />
+                  ))
+                ) : cells.length === 0 ? (
+                  <div style={{ padding: 36, textAlign: "center", width: "100%" }}>
+                    <div className="big">Sem valores na cartela</div>
+                    <div className="micro" style={{ marginTop: 8 }}>Crie uma meta ou gere uma nova cartela.</div>
+                    <div style={{ marginTop: 12 }}>
+                      <button className="btn btnPrimary" onClick={() => setScreen("create")}>Criar meta</button>
+                    </div>
+                  </div>
+                ) : (
+                  cells.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={(e) => askCheck(c, e)}
+                      className={[
                       "cell",
-                      cellClass(c.value),
                       c.is_checked ? "paid" : "",
                       justPaidId === c.id ? "justPaid" : "",
                       justCheckedId === c.id ? "justChecked" : "",
-                    ].join(" ")}
-                    role="button"
-                    aria-disabled={loading || c.is_checked}
-                    title={c.is_checked ? "Já marcado" : "Clique para marcar"}
-                  >
-                    <div className="check">✓</div>
-                    <div>R$ {c.value}</div>
-                  </div>
-                ))}
+                      animatingId === c.id ? "clickAnim" : "",
+                      glowId === c.id ? "clickGlow" : "",
+                      ].join(" ")}
+                      role="button"
+                      aria-disabled={loading || c.is_checked}
+                      title={c.is_checked ? "Já marcado" : "Clique para marcar"}
+                    >
+                      <div className="check">✓</div>
+                      <div className="cellValue">{c.value}</div>
+                    </div>
+                  ))
+                )}
 
                 {moneyPops.map((p) => (
                   <div
