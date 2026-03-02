@@ -128,11 +128,12 @@
 	background: linear-gradient(90deg, #f6e27a, #d4af37);
 	color: #1f2937;
 	font-weight: 700;
-	font-size: 11px;
+	font-size: 12px; /* text-xs */
 	border-radius: 999px;
-	padding: 4px 8px;
+	padding: 6px 12px; /* px-3 py-1.5 */
 	display: inline-flex;
 	align-items: center;
+	min-height: 28px;
 }
 
 /* finished neutral CTA */
@@ -141,7 +142,7 @@
 	color: #1f2937;
 	border: 1px solid rgba(2,6,23,0.04);
 	padding: 10px 12px;
-	border-radius: 8px;
+	border-radius: 999px; /* match pill rounding of primary CTA */
 	font-weight: 700;
 }
 .btnFinished:hover { transform: none; }
