@@ -687,10 +687,13 @@ export default function Home() {
                   <div className={`card ${isCompleted ? "cardCompleted" : ""}`} key={g.id}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <div>
-                        <div className="big">{g.title}</div>
+                        <div className="big">{isCompleted ? <><span className="goldCheck" aria-hidden>✔</span> {g.title}</> : g.title}</div>
                         <div className="muted" style={{ fontWeight: 850, marginTop: 2 }}>{`R$ ${fmt(saved)} / R$ ${fmt(g.target_amount)}`}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: 'center' }}>
+                        {isCompleted && (
+                          <div className="finalizedBadge" aria-hidden>FINALIZADA</div>
+                        )}
                         <button
                           className="btn btnSmall btnGhost"
                           onClick={() => {
@@ -716,25 +719,35 @@ export default function Home() {
                       </div>
                       <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
                         <div className="muted" style={{ fontWeight: 950 }}>{`${Math.round(pct)}%`}</div>
-                        <div className="muted" style={{ fontWeight: 950 }}>{isCompleted ? "Meta concluída" : `Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
+                        <div className="muted" style={{ fontWeight: isCompleted ? 600 : 950 }}>{isCompleted ? "Meta concluída" : `Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
                       </div>
                     </div>
 
                     <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                       <div style={{ flex: 1 }}>
-                        <button
-                          className="btn btnPrimary"
-                          style={{ width: "100%" }}
-                          onClick={() => {
-                            if (!isCompleted) {
+                        {isCompleted ? (
+                          <button
+                            className="btnFinished"
+                            style={{ width: "100%", cursor: "default" }}
+                            onClick={() => {
                               setActiveGoalId(g.id);
                               setScreen("grid");
-                            }
-                          }}
-                          disabled={isCompleted}
-                        >
-                          {isCompleted ? "Meta concluída" : "Ver cartela"}
-                        </button>
+                            }}
+                          >
+                            Concluída
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btnPrimary"
+                            style={{ width: "100%" }}
+                            onClick={() => {
+                              setActiveGoalId(g.id);
+                              setScreen("grid");
+                            }}
+                          >
+                            Ver cartela
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginLeft: "auto", paddingRight: 6 }}>
                         <div className="chip">⏳ Prazo: <span>{g.deadline ? String(g.deadline).split("T")[0].split("-").reverse().join("/") : "—"}</span></div>
@@ -942,7 +955,7 @@ export default function Home() {
                   <div className="muted" style={{ fontWeight: 950 }}>
                     {activeGoal ? `${progress.pct.toFixed(0)}%` : "0%"}
                   </div>
-                  <div className="muted" style={{ fontWeight: 950 }}>
+                  <div className="muted" style={{ fontWeight: progress.pct >= 100 ? 600 : 950 }}>
                     {activeGoal ? (progress.pct >= 100 ? "Meta concluída" : `Faltam R$ ${fmt(remaining)}`) : "Faltam R$ 0"}
                   </div>
                 </div>

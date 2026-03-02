@@ -110,7 +110,8 @@
 	border: 1px solid rgba(212,175,55,0.6);
 	background-color: #faf7ef;
 	/* subtle finished state */
-	opacity: 0.98;
+ box-shadow: 0 0 18px rgba(212,175,55,0.25);
+ opacity: 0.98;
 }
 
 /* disable hover transform/effects for completed cards */
@@ -118,4 +119,30 @@
 	opacity: 0.95;
 	transform: none;
 }
+
+/* gold check before title */
+.goldCheck { color: #d4af37; margin-right: 8px; font-weight: 700; }
+
+/* finalized badge capsule */
+.finalizedBadge {
+	background: linear-gradient(90deg, #f6e27a, #d4af37);
+	color: #1f2937;
+	font-weight: 700;
+	font-size: 11px;
+	border-radius: 999px;
+	padding: 4px 8px;
+	display: inline-flex;
+	align-items: center;
+}
+
+/* finished neutral CTA */
+.btnFinished {
+	background: #e7e2cf;
+	color: #1f2937;
+	border: 1px solid rgba(2,6,23,0.04);
+	padding: 10px 12px;
+	border-radius: 8px;
+	font-weight: 700;
+}
+.btnFinished:hover { transform: none; }
 
