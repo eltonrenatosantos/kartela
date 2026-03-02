@@ -92,3 +92,16 @@
 .progressBar { position: relative; }
 .progressFill { height: 12px; border-radius: 8px; }
 
+/* completed gold style */
+.progressFill.completed {
+	background: linear-gradient(90deg, #d4af37, #f6e27a, #d4af37);
+	box-shadow: 0 0 12px rgba(212,175,55,0.4);
+	background-size: 200% 100%;
+	animation: goldShine 2s linear infinite;
+}
+
+@keyframes goldShine {
+	0% { background-position: 0% 0; }
+	100% { background-position: 200% 0; }
+}
+

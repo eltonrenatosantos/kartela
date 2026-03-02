@@ -172,6 +172,20 @@ export default function Home() {
     document.documentElement.style.setProperty("--progHue", String(hueForPct(progress.pct)));
   }, [progress.pct]);
 
+  // sort goals so incomplete (active) first, completed last
+  const sortedGoals = useMemo(() => {
+    return [...goals].sort((a, b) => {
+      const aSaved = (goalSums[a.id] ?? 0) as number;
+      const bSaved = (goalSums[b.id] ?? 0) as number;
+      const aPct = a.target_amount ? clamp((aSaved / a.target_amount) * 100, 0, 100) : 0;
+      const bPct = b.target_amount ? clamp((bSaved / b.target_amount) * 100, 0, 100) : 0;
+      const aDone = aPct >= 100;
+      const bDone = bPct >= 100;
+      if (aDone === bDone) return 0;
+      return aDone ? 1 : -1;
+    });
+  }, [goals, goalSums]);
+
   function toast(msg: string) {
     setToastMsg(msg);
     setToastShow(true);
@@ -665,9 +679,10 @@ export default function Home() {
             <div className="screenTitle">Minhas metas</div>
 
             <div className="stack">
-              {goals.map((g) => {
+              {sortedGoals.map((g) => {
                 const saved = goalSums[g.id] ?? 0;
                 const pct = g.target_amount ? clamp((saved / g.target_amount) * 100, 0, 100) : 0;
+                const isCompleted = pct >= 100;
                 return (
                   <div className="card" key={g.id}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
@@ -697,11 +712,11 @@ export default function Home() {
 
                     <div className="progressWrap" style={{ marginTop: 10 }}>
                       <div className="progressBar">
-                        <div className={`progressFill`} style={{ width: `${pct}%` }} />
+                        <div className={`progressFill ${isCompleted ? "completed" : ""}`} style={{ width: `${pct}%` }} />
                       </div>
                       <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
                         <div className="muted" style={{ fontWeight: 950 }}>{`${Math.round(pct)}%`}</div>
-                        <div className="muted" style={{ fontWeight: 950 }}>{`Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
+                        <div className="muted" style={{ fontWeight: 950 }}>{isCompleted ? "Meta concluída" : `Faltam R$ ${fmt(Math.max(0, g.target_amount - saved))}`}</div>
                       </div>
                     </div>
 
@@ -918,14 +933,14 @@ export default function Home() {
 
               <div className="progressWrap">
                 <div className="progressBar">
-                  <div className={`progressFill ${progressClass}`} style={{ width: `${progress.pct}%` }} />
+                  <div className={`progressFill ${progressClass} ${progress.pct >= 100 ? "completed" : ""}`} style={{ width: `${progress.pct}%` }} />
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
                   <div className="muted" style={{ fontWeight: 950 }}>
                     {activeGoal ? `${progress.pct.toFixed(0)}%` : "0%"}
                   </div>
                   <div className="muted" style={{ fontWeight: 950 }}>
-                    {activeGoal ? `Faltam R$ ${fmt(remaining)}` : "Faltam R$ 0"}
+                    {activeGoal ? (progress.pct >= 100 ? "Meta concluída" : `Faltam R$ ${fmt(remaining)}`) : "Faltam R$ 0"}
                   </div>
                 </div>
               </div>
